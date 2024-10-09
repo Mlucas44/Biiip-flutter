@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/pourboire.dart';
 import '../utils/color.dart';
 import 'pourboire_detail_page.dart';
+import 'ajouter_pourboire_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../controller/pourboire_data_table.dart';
 
 class PourboireListPage extends StatefulWidget {
   const PourboireListPage({super.key});
@@ -24,22 +26,18 @@ class _PourboireListPageState extends State<PourboireListPage> {
 
   Future<List<Pourboire>> _fetchPourboires() async {
     try {
-      print('Utilisateur actuel : ${_supabase.auth.currentUser}');
-
-      final res = await _supabase.from('pourboires').select();
-
-      print('Réponse brute : $res');
+      final res = await _supabase
+          .from('pourboires')
+          .select()
+          .order('created_at', ascending: false);
 
       if (res != null && res is List) {
         List<Pourboire> pourboires = res
             .map((item) => Pourboire.fromMap(item as Map<String, dynamic>))
             .toList();
 
-        print('Liste des pourboires : $pourboires');
-
         return pourboires;
       } else {
-        print('Aucune donnée récupérée ou format inattendu.');
         return [];
       }
     } catch (e) {
@@ -54,16 +52,35 @@ class _PourboireListPageState extends State<PourboireListPage> {
     });
   }
 
+  void _ajouterPourboire() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AjouterPourboirePage()),
+    );
+    if (result == true) {
+      _refreshPourboires();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      floatingActionButton: FloatingActionButton(
+        onPressed: _ajouterPourboire,
+        backgroundColor: AppColors.primaryColor,
+        foregroundColor: AppColors.whiteColor,
+        child: const Icon(
+          Icons.add,
+          color: AppColors.whiteColor,
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: _refreshPourboires,
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 50.0),
+              padding: const EdgeInsets.only(top: 22.0, bottom: 5.0),
               child: Center(
                 child: Image.asset(
                   'assets/images/logo.png',
@@ -71,7 +88,6 @@ class _PourboireListPageState extends State<PourboireListPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
             Expanded(
               child: FutureBuilder<List<Pourboire>>(
                 future: _futurePourboires,
@@ -92,11 +108,20 @@ class _PourboireListPageState extends State<PourboireListPage> {
                   } else {
                     List<Pourboire> pourboires = snapshot.data!;
 
+                    final pourboireDataSource =
+                        PourboireDataTableSource(pourboires, context);
+
                     return SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: PaginatedDataTable(
+                          header: const Text(
+                            'Liste des pourboires',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           columns: const [
                             DataColumn(
                               label: Text(
@@ -126,29 +151,10 @@ class _PourboireListPageState extends State<PourboireListPage> {
                               ),
                             ),
                           ],
-                          rows: pourboires
-                              .map(
-                                (pourboire) => DataRow(
-                                  cells: [
-                                    DataCell(Text(pourboire.id.toString())),
-                                    DataCell(Text('${pourboire.montant} €')),
-                                    DataCell(Text(pourboire.commentaire ?? '')),
-                                  ],
-                                  onSelectChanged: (bool? selected) {
-                                    if (selected != null && selected) {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              PourboireDetailPage(
-                                                  pourboire: pourboire),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                ),
-                              )
-                              .toList(),
+                          source: pourboireDataSource,
+                          rowsPerPage: 10,
+                          columnSpacing: 20,
+                          showCheckboxColumn: false,
                         ),
                       ),
                     );
